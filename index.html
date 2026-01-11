@@ -1,43 +1,44 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Webcam Silla</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <style>
-    body {
-      margin: 0;
-      background: black;
-    }
-    video {
-      width: 100vw;
-      height: auto;
-    }
-  </style>
 </head>
-<body>
+<body style="margin:0;background:black;">
 
-<video id="video" autoplay muted playsinline controls></video>
+<video
+  id="video"
+  controls
+  muted
+  playsinline
+  style="width:100%;height:auto;background:black">
+</video>
+
+<button id="play"
+  style="position:absolute;top:10px;left:10px;z-index:10;">
+  ▶ Start Stream
+</button>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
   const video = document.getElementById("video");
+  const btn = document.getElementById("play");
+  const src = "https://716f898c7b71.entrypoint.cloud.wowza.com/app-8F9K44lJ/304679fe_stream2/playlist.m3u8";
 
-  // 👇 THIS is the master playlist you already have
-  const hlsUrl = "https://716f898c7b71.entrypoint.cloud.wowza.com/app-8F9K44lJ/304679fe_stream2/playlist.m3u8";
+  btn.onclick = () => {
+    btn.style.display = "none";
 
-  if (Hls.isSupported()) {
-    const hls = new Hls({
-      lowLatencyMode: true,
-      backBufferLength: 30
-    });
-    hls.loadSource(hlsUrl);
-    hls.attachMedia(video);
-  } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-    // Safari (native HLS)
-    video.src = hlsUrl;
-  }
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        lowLatencyMode: true
+      });
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      video.play();
+    } else {
+      video.src = src;
+      video.play();
+    }
+  };
 </script>
 
 </body>
