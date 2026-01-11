@@ -101,6 +101,7 @@
     let hls;
     let retryCount = 0;
     const maxRetries = 3;
+    let lastDuration = 0;
     
     speeds.forEach(speed => {
       const btn = document.createElement('button');
@@ -117,36 +118,35 @@
       
       let info = '';
       
-      // Check if live or VOD
-      if (duration === Infinity) {
+      // Detect if duration is growing (true live) or static (VOD/loop)
+      if (duration !== lastDuration) {
+        info += '<strong>LIVE (Duration growing)</strong><br>';
+        lastDuration = duration;
+      } else if (duration === Infinity) {
         info += '<strong>LIVE STREAM</strong><br>';
-      } else if (!isNaN(duration) && duration > 0) {
-        info += '<strong>VOD</strong><br>';
-        info += `Duration: ${formatTime(duration)}<br>`;
+      } else {
+        info += '<strong>VOD/LOOP (' + formatTime(duration) + ')</strong><br>';
       }
       
-      // Check seekable range
+      info += `Current: ${formatTime(currentTime)}<br>`;
+      
       if (video.seekable.length > 0) {
         const seekStart = video.seekable.start(0);
         const seekEnd = video.seekable.end(0);
-        const dvrWindow = seekEnd - seekStart;
-        
-        info += `Seekable: ${formatTime(dvrWindow)}<br>`;
-        info += `Start: ${formatTime(seekStart)}<br>`;
-        info += `End: ${formatTime(seekEnd)}<br>`;
-        info += `Current: ${formatTime(currentTime)}<br>`;
-      } else {
-        info += 'No seekable range<br>';
+        info += `Seekable: ${formatTime(seekStart)} - ${formatTime(seekEnd)}<br>`;
       }
       
-      // Buffered info
       if (video.buffered.length > 0) {
         const bufStart = video.buffered.start(0);
         const bufEnd = video.buffered.end(video.buffered.length - 1);
-        info += `Buffered: ${formatTime(bufEnd - bufStart)}`;
+        info += `Buffered: ${formatTime(bufStart)} - ${formatTime(bufEnd)}`;
       }
       
-      streamInfo.innerHTML = info || 'No stream data available';
+      if (hls && hls.levels && hls.levels.length > 0) {
+        info += `<br>Qualities: ${hls.levels.length}`;
+      }
+      
+      streamInfo.innerHTML = info;
     }
     
     function formatTime(seconds) {
@@ -154,7 +154,7 @@
       const h = Math.floor(seconds / 3600);
       const m = Math.floor((seconds % 3600) / 60);
       const s = Math.floor(seconds % 60);
-      return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
+      return h > 0 ? `${h}h${m}m${s}s` : `${m}m${s}s`;
     }
     
     function setSpeed(speed, clickedBtn) {
@@ -175,9 +175,9 @@
           if (!video.paused && !video.ended) {
             const newTime = video.currentTime + skipAmount;
             
-            // Stay within seekable range
+            // Don't seek beyond available content
             if (video.seekable.length > 0) {
-              const maxSeek = video.seekable.end(0) - 2;
+              const maxSeek = video.seekable.end(0) - 1;
               video.currentTime = Math.min(newTime, maxSeek);
             } else {
               video.currentTime = newTime;
@@ -199,27 +199,38 @@
     function startStream() {
       if (Hls.isSupported()) {
         hls = new Hls({
-          lowLatencyMode: false,
+          debug: true, // Enable console logging to see what's happening
+          lowLatencyMode: true,
+          backBufferLength: 90, // Keep 90s of back buffer for seeking
+          maxBufferLength: 30,
+          maxMaxBufferLength: 60,
           manifestLoadingTimeOut: 20000,
           manifestLoadingMaxRetry: 4,
           levelLoadingTimeOut: 20000,
           fragLoadingTimeOut: 30000,
-          enableWorker: true
+          enableWorker: true,
+          liveSyncDurationCount: 3,
+          liveMaxLatencyDurationCount: 10
         });
         
         hls.loadSource(src);
         hls.attachMedia(video);
         
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+          console.log('Manifest parsed:', data);
           video.muted = true;
           video.volume = 0;
           video.play().catch(err => console.error("Play failed:", err));
-          
-          // Force initial update
           setTimeout(updateStreamInfo, 500);
         });
         
+        hls.on(Hls.Events.LEVEL_LOADED, (event, data) => {
+          console.log('Level loaded. Live:', data.details.live, 'Duration:', data.details.totalduration);
+        });
+        
         hls.on(Hls.Events.ERROR, (event, data) => {
+          console.error("HLS Error:", data);
+          
           if (data.fatal) {
             if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCount < maxRetries) {
               retryCount++;
@@ -241,21 +252,19 @@
       }
     }
     
-    // Update info every second
     setInterval(updateStreamInfo, 1000);
     
-    // Prevent seeking outside seekable range
+    // Prevent seeking to unavailable range
     video.addEventListener('seeking', () => {
       if (video.seekable.length > 0) {
         const seekStart = video.seekable.start(0);
         const seekEnd = video.seekable.end(0);
         
         if (video.currentTime < seekStart) {
-          console.log('Clamping to seekStart:', seekStart);
-          video.currentTime = seekStart + 0.1; // Add small offset
-        } else if (video.currentTime > seekEnd) {
-          console.log('Clamping to seekEnd:', seekEnd);
-          video.currentTime = seekEnd - 1;
+          console.log('Seek out of range, clamping to', seekStart);
+          video.currentTime = seekStart + 0.5;
+        } else if (video.currentTime > seekEnd - 0.5) {
+          video.currentTime = seekEnd - 0.5;
         }
       }
     });
