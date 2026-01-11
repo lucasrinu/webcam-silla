@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     html, body {
@@ -16,22 +19,9 @@
       width: 100%;
       height: 100%;
     }
-    #debug {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(255,255,255,0.8);
-      padding: 10px;
-      font-family: monospace;
-      font-size: 12px;
-      max-width: 90%;
-      word-wrap: break-word;
-      z-index: 100;
-    }
   </style>
 </head>
 <body>
-  <div id="debug">Initializing...</div>
   <video
     id="video"
     controls
@@ -43,56 +33,59 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
     const video = document.getElementById("video");
-    const debug = document.getElementById("debug");
     const src = "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8";
+    let hls;
+    let retryCount = 0;
+    const maxRetries = 3;
     
-    function log(msg) {
-      debug.innerHTML += '<br>' + msg;
-      console.log(msg);
+    function startStream() {
+      if (Hls.isSupported()) {
+        hls = new Hls({
+          lowLatencyMode: false,
+          manifestLoadingTimeOut: 20000, // Increase timeout to 20s
+          manifestLoadingMaxRetry: 4,
+          levelLoadingTimeOut: 20000,
+          fragLoadingTimeOut: 30000,
+          enableWorker: true
+        });
+        
+        hls.loadSource(src);
+        hls.attachMedia(video);
+        
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.play().catch(err => console.error("Play failed:", err));
+        });
+        
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          console.error("HLS Error:", data.type, data.details);
+          
+          if (data.fatal) {
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCount < maxRetries) {
+              console.log("Network error, retrying... (" + (retryCount + 1) + "/" + maxRetries + ")");
+              retryCount++;
+              setTimeout(() => {
+                hls.destroy();
+                startStream();
+              }, 1000);
+            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              console.log("Media error, attempting recovery");
+              hls.recoverMediaError();
+            }
+          }
+        });
+        
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = src;
+        video.play().catch(err => console.error("Play error:", err));
+      }
     }
     
-    log("HLS.js supported: " + Hls.isSupported());
-    log("Native HLS: " + video.canPlayType('application/vnd.apple.mpegurl'));
-    
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        lowLatencyMode: true,
-        debug: true
-      });
-      
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        log("HLS ERROR: " + data.type + " - " + data.details);
-        if (data.fatal) {
-          log("FATAL ERROR");
-        }
-      });
-      
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        log("Manifest loaded");
-      });
-      
-      log("Loading source...");
-      hls.loadSource(src);
-      hls.attachMedia(video);
-      
-      video.play().then(() => {
-        log("Playing");
-      }).catch(err => {
-        log("Play error: " + err.message);
-      });
-      
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      log("Using native HLS");
-      video.src = src;
-      video.play().catch(err => log("Play error: " + err.message));
+    // Wait for page to fully load before starting
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startStream);
     } else {
-      log("No HLS support available");
+      startStream();
     }
-    
-    video.addEventListener('loadstart', () => log("loadstart"));
-    video.addEventListener('loadedmetadata', () => log("loadedmetadata"));
-    video.addEventListener('canplay', () => log("canplay"));
-    video.addEventListener('error', (e) => log("Video error: " + e.message));
   </script>
 </body>
 </html>
