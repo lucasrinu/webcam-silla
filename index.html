@@ -26,12 +26,11 @@
       display: none;
     }
     
-    /* Speed controls overlay */
     #speedControls {
       position: absolute;
       top: 10px;
       right: 10px;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.8);
       padding: 10px;
       border-radius: 5px;
       z-index: 1000;
@@ -54,10 +53,18 @@
       background: rgba(0, 150, 255, 0.8);
       border-color: rgba(0, 150, 255, 1);
     }
+    #speedLabel {
+      color: white;
+      font-family: monospace;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
-  <div id="speedControls"></div>
+  <div id="speedControls">
+    <div id="speedLabel">Timelapse Speed</div>
+  </div>
   
   <video
     id="video"
@@ -71,13 +78,17 @@
   <script>
     const video = document.getElementById("video");
     const speedControls = document.getElementById("speedControls");
+    const speedLabel = document.getElementById("speedLabel");
     const src = "https://customer-rhnwzxvb3mg4wz3v.cloudflarestream.com/9670db1ec306039c0abc79ec5feb3e36/manifest/video.m3u8?parentOrigin=https%3A%2F%2Fcloudflare.tv";
+    
+    // For speeds <=16, use native playbackRate. For higher, skip frames manually
     const speeds = [0.25, 0.5, 1, 2, 5, 10, 100, 500, 1000];
+    let currentSpeed = 1;
+    let timelapseInterval = null;
     let hls;
     let retryCount = 0;
     const maxRetries = 3;
     
-    // Create speed buttons
     speeds.forEach(speed => {
       const btn = document.createElement('button');
       btn.className = 'speedBtn';
@@ -88,13 +99,41 @@
     });
     
     function setSpeed(speed, clickedBtn) {
-      video.playbackRate = speed;
+      currentSpeed = speed;
       
-      // Update active button
+      // Clear any existing timelapse
+      if (timelapseInterval) {
+        clearInterval(timelapseInterval);
+        timelapseInterval = null;
+      }
+      
+      if (speed <= 16) {
+        // Use native playback rate for speeds browser supports
+        video.playbackRate = speed;
+      } else {
+        // For high speeds, manually skip frames
+        video.playbackRate = 1;
+        
+        // Calculate how much to skip based on desired speed
+        // At 30fps, skip 'speed' frames worth of time each frame
+        const skipAmount = speed / 30; // seconds to skip per update
+        
+        timelapseInterval = setInterval(() => {
+          if (!video.paused && !video.ended) {
+            video.currentTime += skipAmount;
+          }
+        }, 1000 / 30); // Update 30 times per second
+      }
+      
+      // Update UI
       document.querySelectorAll('.speedBtn').forEach(btn => {
         btn.classList.remove('active');
       });
       clickedBtn.classList.add('active');
+      
+      speedLabel.textContent = speed <= 16 
+        ? `Speed: ${speed}x (native)` 
+        : `Timelapse: ${speed}x (skip frames)`;
     }
     
     function startStream() {
@@ -122,14 +161,12 @@
           
           if (data.fatal) {
             if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCount < maxRetries) {
-              console.log("Network error, retrying... (" + (retryCount + 1) + "/" + maxRetries + ")");
               retryCount++;
               setTimeout(() => {
                 hls.destroy();
                 startStream();
               }, 1000);
             } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-              console.log("Media error, attempting recovery");
               hls.recoverMediaError();
             }
           }
@@ -146,6 +183,20 @@
     video.addEventListener('volumechange', () => {
       if (!video.muted) video.muted = true;
       if (video.volume > 0) video.volume = 0;
+    });
+    
+    // Clean up interval when paused
+    video.addEventListener('pause', () => {
+      if (timelapseInterval) {
+        clearInterval(timelapseInterval);
+        timelapseInterval = null;
+      }
+    });
+    
+    video.addEventListener('play', () => {
+      if (currentSpeed > 16 && !timelapseInterval) {
+        setSpeed(currentSpeed, document.querySelector('.speedBtn.active'));
+      }
     });
     
     if (document.readyState === 'loading') {
