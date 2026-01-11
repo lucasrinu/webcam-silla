@@ -16,22 +16,9 @@
       width: 100%;
       height: 100%;
     }
-    #debug {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(255,255,255,0.8);
-      padding: 10px;
-      font-family: monospace;
-      font-size: 12px;
-      max-width: 90%;
-      word-wrap: break-word;
-      z-index: 100;
-    }
   </style>
 </head>
 <body>
-  <div id="debug">Initializing...</div>
   <video
     id="video"
     controls
@@ -43,56 +30,30 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
     const video = document.getElementById("video");
-    const debug = document.getElementById("debug");
-    const src = "https://716f898c7b71.entrypoint.cloud.wowza.com/app-8F9K44lJ/304679fe_stream2/playlist.m3u8";
-    
-    function log(msg) {
-      debug.innerHTML += '<br>' + msg;
-      console.log(msg);
-    }
-    
-    log("HLS.js supported: " + Hls.isSupported());
-    log("Native HLS: " + video.canPlayType('application/vnd.apple.mpegurl'));
+    // Using CORS proxy to bypass restrictions
+    const originalSrc = "https://716f898c7b71.entrypoint.cloud.wowza.com/app-8F9K44lJ/304679fe_stream2/playlist.m3u8";
+    const src = "https://corsproxy.io/?" + encodeURIComponent(originalSrc);
     
     if (Hls.isSupported()) {
       const hls = new Hls({
         lowLatencyMode: true,
-        debug: true
-      });
-      
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        log("HLS ERROR: " + data.type + " - " + data.details);
-        if (data.fatal) {
-          log("FATAL ERROR");
+        xhrSetup: function(xhr, url) {
+          // Ensure credentials aren't sent with proxy
+          xhr.withCredentials = false;
         }
       });
       
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        log("Manifest loaded");
-      });
-      
-      log("Loading source...");
       hls.loadSource(src);
       hls.attachMedia(video);
       
-      video.play().then(() => {
-        log("Playing");
-      }).catch(err => {
-        log("Play error: " + err.message);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play();
       });
       
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      log("Using native HLS");
       video.src = src;
-      video.play().catch(err => log("Play error: " + err.message));
-    } else {
-      log("No HLS support available");
+      video.play();
     }
-    
-    video.addEventListener('loadstart', () => log("loadstart"));
-    video.addEventListener('loadedmetadata', () => log("loadedmetadata"));
-    video.addEventListener('canplay', () => log("canplay"));
-    video.addEventListener('error', (e) => log("Video error: " + e.message));
   </script>
 </body>
 </html>
