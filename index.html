@@ -1,55 +1,44 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-  />
+  <meta charset="UTF-8">
+  <title>Live Weather Camera</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <style>
-    html, body {
+    body {
       margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
       background: black;
-      overflow: hidden;
     }
-
-    #player {
-      width: 100%;
-      height: 100%;
-    }
-
-    ::-webkit-scrollbar {
-      display: none;
+    video {
+      width: 100vw;
+      height: auto;
     }
   </style>
 </head>
 <body>
 
-  <div id="player">
-    <a
-      name="windy-webcam-timelapse-player"
-      data-id="1309442647"
-      data-play="day"
-      data-loop="0"
-      data-auto-play="0"
-      data-force-full-screen-on-overlay-play="0"
-      data-interactive="1"
-      href="https://windy.com/webcams/1309442647"
-      target="_blank"
-    >
-      Santa Pola: Puerto santa pola
-    </a>
-  </div>
+<video id="video" autoplay muted playsinline controls></video>
 
-  <script
-    async
-    type="text/javascript"
-    src="https://webcams.windy.com/webcams/public/embed/v2/script/player.js">
-  </script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script>
+  const video = document.getElementById("video");
+
+  // 👇 THIS is the master playlist you already have
+  const hlsUrl = "https://YOUR-WOWZA-URL/playlist.m3u8";
+
+  if (Hls.isSupported()) {
+    const hls = new Hls({
+      lowLatencyMode: true,
+      backBufferLength: 30
+    });
+    hls.loadSource(hlsUrl);
+    hls.attachMedia(video);
+  } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    // Safari (native HLS)
+    video.src = hlsUrl;
+  }
+</script>
 
 </body>
 </html>
