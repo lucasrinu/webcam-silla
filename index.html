@@ -2,7 +2,6 @@
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
   <style>
     html, body {
       margin: 0;
@@ -12,12 +11,10 @@
       overflow: hidden;
       background: black;
     }
-
     video {
-      display: block;
       width: 100%;
       height: 100%;
-      object-fit: contain;
+      display: block;
       background: black;
     }
   </style>
@@ -29,6 +26,8 @@
   controls
   muted
   playsinline
+  preload="none"
+  crossorigin="anonymous"
   type="application/vnd.apple.mpegurl"
   src="https://716f898c7b71.entrypoint.cloud.wowza.com/app-8F9K44lJ/304679fe_stream2/playlist.m3u8">
 </video>
