@@ -2,50 +2,97 @@
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
   <style>
     html, body {
       margin: 0;
       padding: 0;
       width: 100%;
       height: 100%;
-      overflow: hidden; /* ✅ disable scrolling */
+      overflow: hidden;
       background: black;
     }
-
     video {
-      display: block; /* ✅ remove inline gap that causes scroll */
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #debug {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.8);
+      padding: 10px;
+      font-family: monospace;
+      font-size: 12px;
+      max-width: 90%;
+      word-wrap: break-word;
+      z-index: 100;
     }
   </style>
 </head>
-
 <body>
-
-<video
-  id="video"
-  controls
-  muted
-  playsinline
-  style="width:100%;height:auto;background:black">
-</video>
-
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-<script>
-  const video = document.getElementById("video");
-  const btn = document.getElementById("play");
-  const src = "https://716f898c7b71.entrypoint.cloud.wowza.com/app-8F9K44lJ/304679fe_stream2/playlist.m3u8";
-
-  if (Hls.isSupported()) {
-    const hls = new Hls({
-      lowLatencyMode: true
-    });
-    hls.loadSource(src);
-    hls.attachMedia(video);
-    video.play();
-  } else {
-    video.src = src;
-    video.play();
-  }
-</script>
-
+  <div id="debug">Initializing...</div>
+  <video
+    id="video"
+    controls
+    muted
+    playsinline
+    style="background:black">
+  </video>
+  
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+    const video = document.getElementById("video");
+    const debug = document.getElementById("debug");
+    const src = "https://716f898c7b71.entrypoint.cloud.wowza.com/app-8F9K44lJ/304679fe_stream2/playlist.m3u8";
+    
+    function log(msg) {
+      debug.innerHTML += '<br>' + msg;
+      console.log(msg);
+    }
+    
+    log("HLS.js supported: " + Hls.isSupported());
+    log("Native HLS: " + video.canPlayType('application/vnd.apple.mpegurl'));
+    
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        lowLatencyMode: true,
+        debug: true
+      });
+      
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        log("HLS ERROR: " + data.type + " - " + data.details);
+        if (data.fatal) {
+          log("FATAL ERROR");
+        }
+      });
+      
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        log("Manifest loaded");
+      });
+      
+      log("Loading source...");
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      
+      video.play().then(() => {
+        log("Playing");
+      }).catch(err => {
+        log("Play error: " + err.message);
+      });
+      
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      log("Using native HLS");
+      video.src = src;
+      video.play().catch(err => log("Play error: " + err.message));
+    } else {
+      log("No HLS support available");
+    }
+    
+    video.addEventListener('loadstart', () => log("loadstart"));
+    video.addEventListener('loadedmetadata', () => log("loadedmetadata"));
+    video.addEventListener('canplay', () => log("canplay"));
+    video.addEventListener('error', (e) => log("Video error: " + e.message));
+  </script>
 </body>
+</html>
